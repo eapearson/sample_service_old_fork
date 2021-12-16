@@ -5,13 +5,13 @@ on:
     branches:
       - 'feature-*'
       - 'fix-*'
-      - main
+      - master
   pull_request:
     branches:
-      - main
+      - master
   release:
     branches:
-      - main
+      - master
     types: [ published ]
   workflow_dispatch:
 jobs:
