@@ -1,0 +1,17 @@
+version: "3.8"
+
+# This docker-compose is for developer workflows, not for running in production.
+networks:
+  kbase-dev:
+    name: kbase-dev
+services:
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - "${PWD}:/kb/module"
+    entrypoint: ['./scripts/entrypoint-testing.sh']
+    command: [ 'noop' ]
+
+  

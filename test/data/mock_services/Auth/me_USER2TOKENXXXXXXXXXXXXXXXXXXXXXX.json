@@ -1,0 +1,16 @@
+{
+    "created": 1578347292120,
+    "lastlogin": 1629376312702,
+    "display": "User 2",
+    "roles": [],
+    "customroles": [
+        "fulladmin1",
+        "fulladmin2",
+        "readadmin2"
+    ],
+    "policyids": [],
+    "user": "user2",
+    "local": false,
+    "email": "userservice@lbl.gov",
+    "idents": []
+}

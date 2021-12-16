@@ -1,25 +1,26 @@
-'''
+"""
 Methods for accessing workspace data.
-'''
+"""
 
 from enum import IntEnum
 from typing import List, Optional, Dict as _Dict, Set as _Set
 
 from installed_clients.WorkspaceClient import Workspace
 from installed_clients.baseclient import ServerError as _ServerError
-from SampleService.core.arg_checkers import not_falsy as _not_falsy
+
 from SampleService.core.arg_checkers import check_string as _check_string
+from SampleService.core.arg_checkers import not_falsy as _not_falsy
 from SampleService.core.errors import IllegalParameterError as _IllegalParameterError
-from SampleService.core.errors import UnauthorizedError as _UnauthorizedError
-from SampleService.core.errors import NoSuchWorkspaceDataError as _NoSuchWorkspaceDataError
 from SampleService.core.errors import NoSuchUserError as _NoSuchUserError
+from SampleService.core.errors import NoSuchWorkspaceDataError as _NoSuchWorkspaceDataError
+from SampleService.core.errors import UnauthorizedError as _UnauthorizedError
 from SampleService.core.user import UserID
 
 
 class WorkspaceAccessType(IntEnum):
-    '''
+    """
     The different levels of workspace service access.
-    '''
+    """
     NONE = 1
     READ = 2
     WRITE = 3
@@ -31,7 +32,7 @@ _PERM_TO_PERM_SET: _Dict[WorkspaceAccessType, _Set[str]] = {
     WorkspaceAccessType.READ: {'r', 'w', 'a'},
     WorkspaceAccessType.WRITE: {'w', 'a'},
     WorkspaceAccessType.ADMIN: {'a'}
-    }
+}
 
 _PERM_TO_PERM_TEXT = {WorkspaceAccessType.READ: 'read',
                       WorkspaceAccessType.WRITE: 'write to',
@@ -40,7 +41,7 @@ _PERM_TO_PERM_TEXT = {WorkspaceAccessType.READ: 'read',
 
 
 class UPA:
-    '''
+    """
     A Unique Permanent Address for a workspace object, consisting of the string 'X/Y/Z' where
     X, Y and Z are integers greater than 0 and respectively the workspace ID, the object ID,
     and the object version of the object.
@@ -50,10 +51,10 @@ class UPA:
     :ivar wsid: The workspace ID.
     :ivar objid: The object ID.
     :ivar version: The object version.
-    '''
+    """
 
     def __init__(self, upa: str = None, wsid: int = None, objid: int = None, version: int = None):
-        '''
+        """
         Create the UPA. Requires either the upa parameter or all of the wsid, objid, and version
         parameters. If upa is supplied the other arguments are ignored.
 
@@ -62,7 +63,7 @@ class UPA:
         :param objid: The object ID.
         :param version: The object version.
         :raises IllegalParameterError: if the UPA is invalid.
-        '''
+        """
         if upa:
             self.wsid, self.objid, self.version = self._check_upa(upa)
         else:
@@ -107,7 +108,7 @@ class UPA:
 
 
 class DataUnitID:
-    '''
+    """
     Represents a unit of data in the workspace, which may be a subpart of a workspace object.
     A single workspace object may have many data units.
 
@@ -116,16 +117,16 @@ class DataUnitID:
 
     :ivar upa: The object UPA.
     :ivar dataid: The ID of the data within the object, if any.
-    '''
+    """
 
     def __init__(self, upa: UPA, dataid: str = None):
-        '''
+        """
         Create the DUID.
 
         :param upa: The workspace object's UPA.
         :param dataid: The id of the data within the object that this DUID references with a
             maximum of 256 characters. None if the data unit is the entire object.
-        '''
+        """
         self.upa = _not_falsy(upa, 'upa')
         self.dataid = _check_string(dataid, 'dataid', max_len=256, optional=True)
 
@@ -145,19 +146,19 @@ class DataUnitID:
 
 
 class WS:
-    '''
+    """
     The workspace class.
-    '''
+    """
 
     def __init__(self, client: Workspace):
-        '''
+        """
         Create the workspace class.
 
         Attempts to contact the endpoint of the workspace in administration mode and does not
         catch any exceptions encountered.
 
         :param client: An SDK workspace client with administrator read permissions.
-        '''
+        """
         self._ws = _not_falsy(client, 'client')
         # check token is a valid admin token
         self._ws.administer({'command': 'listModRequests'})
@@ -168,7 +169,7 @@ class WS:
             perm: WorkspaceAccessType,
             workspace_id: int = None,
             upa: UPA = None):
-        '''
+        """
         Check if a user can access a workspace resource. Exactly one of workspace_id or upa must
         be supplied - if both are supplied workspace_id takes precedence.
 
@@ -184,7 +185,7 @@ class WS:
         :raises IllegalParameterError: if the wsid is illegal.
         :raises UnauthorizedError: if the user doesn't have the requested permission.
         :raises NoSuchWorkspaceDataError: if the workspace or UPA doesn't exist.
-        '''
+        """
         _not_falsy(perm, 'perm')
         if workspace_id is not None:
             wsid = workspace_id
@@ -196,7 +197,7 @@ class WS:
             name = 'upa'
             target = str(upa)
         else:
-            raise ValueError('Either an UPA or a workpace ID must be supplied')
+            raise ValueError('Either an UPA or a workspace ID must be supplied')
         if wsid < 1:
             raise _IllegalParameterError(f'{wsid} is not a valid workspace ID')
 
@@ -207,14 +208,16 @@ class WS:
                                     )['perms'][0]
         except _ServerError as se:
             # this is pretty ugly, need error codes
+
             if 'No workspace' in se.args[0] or 'is deleted' in se.args[0]:
                 raise _NoSuchWorkspaceDataError(se.args[0]) from se
             else:
                 raise
-        publicaccess = p.get('*') == 'r' and perm == WorkspaceAccessType.READ
-        hasaccess = p.get(user.id) in _PERM_TO_PERM_SET[perm] if user else False
+        public_access = p.get('*') == 'r' and perm == WorkspaceAccessType.READ
+        has_access = p.get(user.id) in _PERM_TO_PERM_SET[perm] if user else False
+
         # could optimize a bit if NONE and upa but not worth the code complication most likely
-        if (perm != WorkspaceAccessType.NONE and not hasaccess and not publicaccess):
+        if perm != WorkspaceAccessType.NONE and not has_access and not public_access:
             u = f'User {user}' if user else 'Anonymous users'
             raise _UnauthorizedError(f'{u} cannot {_PERM_TO_PERM_TEXT[perm]} {name} {target}')
         if upa:
@@ -230,14 +233,14 @@ class WS:
                 raise _NoSuchWorkspaceDataError(f'Object {upa} does not exist')
 
     def get_user_workspaces(self, user: Optional[UserID]) -> List[int]:
-        '''
+        """
         Get a list of IDs of workspaces a user can read, including public workspaces.
 
         :param user: The username of the user whose workspaces will be returned, or null for an
             anonymous user.
         :returns: A list of workspace IDs.
         :raises NoSuchUserError: if the user does not exist.
-        '''
+        """
         # May also want write / admin / no public ws
         try:
             if user:

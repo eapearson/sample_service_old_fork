@@ -1,5 +1,5 @@
 FROM python:3.7
-MAINTAINER KBase Developer
+LABEL org.opencontainers.image.authors="KBase Developer"
 # -----------------------------------------
 
 ENV DOCKERIZE_VERSION v0.6.1
@@ -12,21 +12,17 @@ RUN \
 
 ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-RUN pip install pipenv
-
 # -----------------------------------------
-COPY Pipfile /tmp/Pipfile
-COPY Pipfile.lock /tmp/Pipfile.lock
-RUN cd /tmp && pipenv install --system --deploy --ignore-pipfile --dev
 
 COPY ./ /kb/module
+WORKDIR /kb/module
 RUN mkdir -p /kb/module/work
 RUN chmod -R a+rw /kb/module
+RUN pip install --upgrade pip \
+    && pip install -r requirements.txt \
+    && pipenv install --system --deploy --ignore-pipfile --dev
 
-WORKDIR /kb/module
-
-# really need a test build and a prod build. Not sure that's possible via sdk.
-# RUN pipenv install --system --deploy --ignore-pipfile --dev
+EXPOSE 5000
 
 ENTRYPOINT [ "./scripts/entrypoint.sh" ]
 

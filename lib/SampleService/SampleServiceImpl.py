@@ -1,19 +1,16 @@
 # -*- coding: utf-8 -*-
-#BEGIN_HEADER
+# BEGIN_HEADER
 
 import datetime as _datetime
-from collections import defaultdict
 
-from SampleService.core.config import build_samples as _build_samples
-from SampleService.core.api_translation import (get_sample_address_from_object as
-                                                _get_sample_address_from_object)
-from SampleService.core.api_translation import get_id_from_object as _get_id_from_object
+from SampleService.core.acls import AdminPermission as _AdminPermission
 from SampleService.core.api_translation import acls_from_dict as _acls_from_dict
 from SampleService.core.api_translation import acls_to_dict as _acls_to_dict
-from SampleService.core.api_translation import sample_to_dict as _sample_to_dict
-from SampleService.core.api_translation import create_sample_params as _create_sample_params
-from SampleService.core.api_translation import validate_samples_params as _validate_samples_params
 from SampleService.core.api_translation import check_admin as _check_admin
+from SampleService.core.api_translation import create_sample_params as _create_sample_params
+from SampleService.core.api_translation import get_id_from_object as _get_id_from_object
+from SampleService.core.api_translation import (get_sample_address_from_object as
+                                                _get_sample_address_from_object)
 from SampleService.core.api_translation import (
     get_static_key_metadata_params as _get_static_key_metadata_params,
     create_data_link_params as _create_data_link_params,
@@ -25,14 +22,18 @@ from SampleService.core.api_translation import (
     datetime_to_epochmilliseconds as _datetime_to_epochmilliseconds,
     get_user_from_object as _get_user_from_object,
     acl_delta_from_dict as _acl_delta_from_dict,
-    )
-from SampleService.core.acls import AdminPermission as _AdminPermission
+)
+from SampleService.core.api_translation import sample_to_dict as _sample_to_dict
+from SampleService.core.api_translation import validate_samples_params as _validate_samples_params
+from SampleService.core.config import build_samples as _build_samples
 from SampleService.core.sample import SampleAddress as _SampleAddress
 from SampleService.core.user import UserID as _UserID
 
 _CTX_USER = 'user_id'
 _CTX_TOKEN = 'token'
-#END_HEADER
+
+
+# END_HEADER
 
 
 class SampleService:
@@ -58,17 +59,16 @@ Note that usage of the administration flags will be logged by the service.
     GIT_URL = "git@github.com:kbase/sample_service.git"
     GIT_COMMIT_HASH = "2c256effd65ea6f27ddea97c23d916670e88a1c6"
 
-    #BEGIN_CLASS_HEADER
-    #END_CLASS_HEADER
+    # BEGIN_CLASS_HEADER
+    # END_CLASS_HEADER
 
     # config contains contents of config file in a hash or None if it couldn't
     # be found
     def __init__(self, config):
-        #BEGIN_CONSTRUCTOR
+        # BEGIN_CONSTRUCTOR
         self._samples, self._user_lookup, self._read_exempt_roles = _build_samples(config)
-        #END_CONSTRUCTOR
+        # END_CONSTRUCTOR
         pass
-
 
     def create_sample(self, ctx, params):
         """
@@ -178,7 +178,7 @@ Note that usage of the administration flags will be logged by the service.
         """
         # ctx is the context object
         # return variables are: address
-        #BEGIN create_sample
+        # BEGIN create_sample
         sample, id_, prev_ver = _create_sample_params(params)
         as_admin, user = _get_admin_request_from_object(params, 'as_admin', 'as_user')
         _check_admin(
@@ -188,7 +188,7 @@ Note that usage of the administration flags will be logged by the service.
         ret = self._samples.save_sample(
             sample, user if user else _UserID(ctx[_CTX_USER]), id_, prev_ver, as_admin=as_admin)
         address = {'id': str(ret[0]), 'version': ret[1]}
-        #END create_sample
+        # END create_sample
 
         # At some point might do deeper type checking...
         if not isinstance(address, dict):
@@ -292,7 +292,7 @@ Note that usage of the administration flags will be logged by the service.
         """
         # ctx is the context object
         # return variables are: sample
-        #BEGIN get_sample
+        # BEGIN get_sample
         id_, ver = _get_sample_address_from_object(params)
         admin = _check_admin(self._user_lookup, ctx.get(_CTX_TOKEN), _AdminPermission.READ,
                              # pretty annoying to test ctx.log_info is working, do it manually
@@ -300,7 +300,7 @@ Note that usage of the administration flags will be logged by the service.
         s = self._samples.get_sample(
             id_, _get_user_from_object(ctx, _CTX_USER), ver, as_admin=admin)
         sample = _sample_to_dict(s)
-        #END get_sample
+        # END get_sample
 
         # At some point might do deeper type checking...
         if not isinstance(sample, dict):
@@ -400,13 +400,13 @@ Note that usage of the administration flags will be logged by the service.
         """
         # ctx is the context object
         # return variables are: samples
-        #BEGIN get_samples
+        # BEGIN get_samples
         if not params.get('samples'):
-          raise ValueError(f"")
+            raise ValueError(f"")
         ids_ = []
         for samp_obj in params['samples']:
-          id_, ver = _get_sample_address_from_object(samp_obj)
-          ids_.append({'id': id_, 'version': ver})
+            id_, ver = _get_sample_address_from_object(samp_obj)
+            ids_.append({'id': id_, 'version': ver})
         # ids_ = _get_sample_addresses_from_object(params)
         admin = _check_admin(self._user_lookup, ctx.get(_CTX_TOKEN), _AdminPermission.READ,
                              # pretty annoying to test ctx.log_info is working, do it manually
@@ -414,7 +414,7 @@ Note that usage of the administration flags will be logged by the service.
         samples = self._samples.get_samples(
             ids_, _get_user_from_object(ctx, _CTX_USER), as_admin=admin)
         samples = [_sample_to_dict(s) for s in samples]
-        #END get_samples
+        # END get_samples
 
         # At some point might do deeper type checking...
         if not isinstance(samples, list):
@@ -450,7 +450,7 @@ Note that usage of the administration flags will be logged by the service.
         """
         # ctx is the context object
         # return variables are: acls
-        #BEGIN get_sample_acls
+        # BEGIN get_sample_acls
         id_ = _get_id_from_object(params, 'id', required=True)
         admin = _check_admin(
             self._user_lookup, ctx.get(_CTX_TOKEN), _AdminPermission.READ,
@@ -459,7 +459,7 @@ Note that usage of the administration flags will be logged by the service.
         acls_ret = self._samples.get_sample_acls(
             id_, _get_user_from_object(ctx, _CTX_USER), as_admin=admin)
         acls = _acls_to_dict(acls_ret, read_exempt_roles=self._read_exempt_roles)
-        #END get_sample_acls
+        # END get_sample_acls
 
         # At some point might do deeper type checking...
         if not isinstance(acls, dict):
@@ -501,7 +501,7 @@ Note that usage of the administration flags will be logged by the service.
            boolean value, 0 for false, 1 for true.)
         """
         # ctx is the context object
-        #BEGIN update_sample_acls
+        # BEGIN update_sample_acls
         id_ = _get_id_from_object(params, 'id', required=True)
         acldelta = _acl_delta_from_dict(params)
         admin = _check_admin(
@@ -509,7 +509,7 @@ Note that usage of the administration flags will be logged by the service.
             # pretty annoying to test ctx.log_info is working, do it manually
             'update_sample_acls', ctx.log_info, skip_check=not params.get('as_admin'))
         self._samples.update_sample_acls(id_, _UserID(ctx[_CTX_USER]), acldelta, as_admin=admin)
-        #END update_sample_acls
+        # END update_sample_acls
         pass
 
     def replace_sample_acls(self, ctx, params):
@@ -540,7 +540,7 @@ Note that usage of the administration flags will be logged by the service.
            false, 1 for true.)
         """
         # ctx is the context object
-        #BEGIN replace_sample_acls
+        # BEGIN replace_sample_acls
         id_ = _get_id_from_object(params, 'id', required=True)
         acls = _acls_from_dict(params)
         admin = _check_admin(
@@ -548,7 +548,7 @@ Note that usage of the administration flags will be logged by the service.
             # pretty annoying to test ctx.log_info is working, do it manually
             'replace_sample_acls', ctx.log_info, skip_check=not params.get('as_admin'))
         self._samples.replace_sample_acls(id_, _UserID(ctx[_CTX_USER]), acls, as_admin=admin)
-        #END replace_sample_acls
+        # END replace_sample_acls
         pass
 
     def get_metadata_key_static_metadata(self, ctx, params):
@@ -585,10 +585,10 @@ Note that usage of the administration flags will be logged by the service.
         """
         # ctx is the context object
         # return variables are: results
-        #BEGIN get_metadata_key_static_metadata
+        # BEGIN get_metadata_key_static_metadata
         keys, prefix = _get_static_key_metadata_params(params)
         results = {'static_metadata': self._samples.get_key_static_metadata(keys, prefix=prefix)}
-        #END get_metadata_key_static_metadata
+        # END get_metadata_key_static_metadata
 
         # At some point might do deeper type checking...
         if not isinstance(results, dict):
@@ -663,7 +663,7 @@ Note that usage of the administration flags will be logged by the service.
         """
         # ctx is the context object
         # return variables are: results
-        #BEGIN create_data_link
+        # BEGIN create_data_link
         duid, sna, update = _create_data_link_params(params)
         as_admin, user = _get_admin_request_from_object(params, 'as_admin', 'as_user')
         _check_admin(
@@ -677,7 +677,7 @@ Note that usage of the administration flags will be logged by the service.
             update,
             as_admin=as_admin)
         results = {'new_link': _links_to_dicts([link])[0]}
-        #END create_data_link
+        # END create_data_link
 
         # At some point might do deeper type checking...
         if not isinstance(results, dict):
@@ -712,7 +712,7 @@ Note that usage of the administration flags will be logged by the service.
            type "user" (A user's username.)
         """
         # ctx is the context object
-        #BEGIN expire_data_link
+        # BEGIN expire_data_link
         duid = _get_data_unit_id_from_object(params)
         as_admin, user = _get_admin_request_from_object(params, 'as_admin', 'as_user')
         _check_admin(
@@ -723,7 +723,7 @@ Note that usage of the administration flags will be logged by the service.
             user if user else _UserID(ctx[_CTX_USER]),
             duid,
             as_admin=as_admin)
-        #END expire_data_link
+        # END expire_data_link
         pass
 
     def get_data_links_from_sample(self, ctx, params):
@@ -781,7 +781,7 @@ Note that usage of the administration flags will be logged by the service.
         """
         # ctx is the context object
         # return variables are: results
-        #BEGIN get_data_links_from_sample
+        # BEGIN get_data_links_from_sample
         sid, ver = _get_sample_address_from_object(params, version_required=True)
         dt = _get_datetime_from_epochmillseconds_in_object(params, 'effective_time')
         admin = _check_admin(
@@ -793,7 +793,7 @@ Note that usage of the administration flags will be logged by the service.
         results = {'links': _links_to_dicts(links),
                    'effective_time': _datetime_to_epochmilliseconds(ts)
                    }
-        #END get_data_links_from_sample
+        # END get_data_links_from_sample
 
         # At some point might do deeper type checking...
         if not isinstance(results, dict):
@@ -854,7 +854,7 @@ Note that usage of the administration flags will be logged by the service.
         """
         # ctx is the context object
         # return variables are: results
-        #BEGIN get_data_links_from_data
+        # BEGIN get_data_links_from_data
         upa = _get_upa_from_object(params)
         dt = _get_datetime_from_epochmillseconds_in_object(params, 'effective_time')
         admin = _check_admin(
@@ -866,7 +866,7 @@ Note that usage of the administration flags will be logged by the service.
         results = {'links': _links_to_dicts(links),
                    'effective_time': _datetime_to_epochmilliseconds(ts)
                    }
-        #END get_data_links_from_data
+        # END get_data_links_from_data
 
         # At some point might do deeper type checking...
         if not isinstance(results, dict):
@@ -973,13 +973,13 @@ Note that usage of the administration flags will be logged by the service.
         """
         # ctx is the context object
         # return variables are: sample
-        #BEGIN get_sample_via_data
+        # BEGIN get_sample_via_data
         upa = _get_upa_from_object(params)
         sid, ver = _get_sample_address_from_object(params, version_required=True)
         sample = self._samples.get_sample_via_data(
             _get_user_from_object(ctx, _CTX_USER), upa, _SampleAddress(sid, ver))
         sample = _sample_to_dict(sample)
-        #END get_sample_via_data
+        # END get_sample_via_data
 
         # At some point might do deeper type checking...
         if not isinstance(sample, dict):
@@ -1027,7 +1027,7 @@ Note that usage of the administration flags will be logged by the service.
         """
         # ctx is the context object
         # return variables are: link
-        #BEGIN get_data_link
+        # BEGIN get_data_link
         id_ = _get_id_from_object(params, 'linkid', required=True)
         _check_admin(
             self._user_lookup, ctx[_CTX_TOKEN], _AdminPermission.READ,
@@ -1035,7 +1035,7 @@ Note that usage of the administration flags will be logged by the service.
             'get_data_link', ctx.log_info)
         dl = self._samples.get_data_link_admin(id_)
         link = _links_to_dicts([dl])[0]
-        #END get_data_link
+        # END get_data_link
 
         # At some point might do deeper type checking...
         if not isinstance(link, dict):
@@ -1141,14 +1141,14 @@ Note that usage of the administration flags will be logged by the service.
         """
         # ctx is the context object
         # return variables are: results
-        #BEGIN validate_samples
+        # BEGIN validate_samples
         samples = _validate_samples_params(params)
         errors = []
         for sample in samples:
-          error_detail = self._samples.validate_sample(sample)
-          errors.extend(error_detail)
+            error_detail = self._samples.validate_sample(sample)
+            errors.extend(error_detail)
         results = {'errors': errors}
-        #END validate_samples
+        # END validate_samples
 
         # At some point might do deeper type checking...
         if not isinstance(results, dict):
@@ -1156,8 +1156,9 @@ Note that usage of the administration flags will be logged by the service.
                              'results is not type dict as required.')
         # return the results
         return [results]
+
     def status(self, ctx):
-        #BEGIN_STATUS
+        # BEGIN_STATUS
         returnVal = {'state': "OK",
                      'message': "",
                      'version': self.VERSION,
@@ -1165,5 +1166,5 @@ Note that usage of the administration flags will be logged by the service.
                      'git_commit_hash': self.GIT_COMMIT_HASH,
                      'servertime': _datetime_to_epochmilliseconds(_datetime.datetime.now(
                          tz=_datetime.timezone.utc))}
-        #END_STATUS
+        # END_STATUS
         return [returnVal]

@@ -6,27 +6,24 @@ import os
 import random as _random
 import sys
 import traceback
+from configparser import ConfigParser
 from getopt import getopt, GetoptError
 from multiprocessing import Process
 from os import environ
 from wsgiref.simple_server import make_server
 
 import requests as _requests
+from biokbase import log
 from jsonrpcbase import JSONRPCService, InvalidParamsError, KeywordError, \
     JSONRPCError, InvalidRequestError
 from jsonrpcbase import ServerError as JSONServerError
 
-from biokbase import log
 from SampleService.authclient import KBaseAuth as _KBaseAuth
-
-try:
-    from ConfigParser import ConfigParser
-except ImportError:
-    from configparser import ConfigParser
 
 DEPLOY = 'KB_DEPLOYMENT_CONFIG'
 SERVICE = 'KB_SERVICE_NAME'
 AUTH = 'auth-service-url'
+
 
 # Note that the error fields do not match the 2.0 JSONRPC spec
 
@@ -53,6 +50,7 @@ def get_config():
 config = get_config()
 
 from SampleService.SampleServiceImpl import SampleService  # noqa @IgnorePep8
+
 impl_SampleService = SampleService(config)
 
 
@@ -95,7 +93,7 @@ class JSONRPCServiceCustom(JSONRPCService):
                 if len(params) < self._man_args(method) - 1:
                     raise InvalidParamsError('not enough arguments')
                 # Does it have too many arguments?
-                if(not self._vargs(method) and len(params) >
+                if (not self._vargs(method) and len(params) >
                         self._max_args(method) - 1):
                     raise InvalidParamsError('too many arguments')
 
@@ -140,10 +138,10 @@ class JSONRPCServiceCustom(JSONRPCService):
         rdata = jsondata
         # we already deserialize the json string earlier in the server code, no
         # need to do it again
-#        try:
-#            rdata = json.loads(jsondata)
-#        except ValueError:
-#            raise ParseError
+        #        try:
+        #            rdata = json.loads(jsondata)
+        #        except ValueError:
+        #            raise ParseError
 
         # set some default values for error handling
         request = self._get_default_vals()
@@ -302,14 +300,14 @@ class ServerError(Exception):
 
     def __str__(self):
         return self.name + ': ' + str(self.code) + '. ' + self.message + \
-            '\n' + self.data
+               '\n' + self.data
 
 
 def getIPAddress(environ):
     xFF = environ.get('HTTP_X_FORWARDED_FOR')
     realIP = environ.get('HTTP_X_REAL_IP')
     trustXHeaders = config is None or \
-        config.get('dont_trust_x_ip_headers') != 'true'
+                    config.get('dont_trust_x_ip_headers') != 'true'
 
     if (trustXHeaders):
         if (xFF):
@@ -456,9 +454,9 @@ class Application(object):
                         if token is None and auth_req == 'required':
                             err = JSONServerError()
                             err.data = (
-                                'Authentication required for ' +
-                                'SampleService ' +
-                                'but no authentication header was passed')
+                                    'Authentication required for ' +
+                                    'SampleService ' +
+                                    'but no authentication header was passed')
                             raise err
                         elif token is None and auth_req == 'optional':
                             pass
@@ -564,14 +562,16 @@ application = Application()
 #
 try:
     import uwsgi
-# Before we do anything with the application, see if the
-# configs specify patching all std routines to be asynch
-# *ONLY* use this if you are going to wrap the service in
-# a wsgi container that has enabled gevent, such as
-# uwsgi with the --gevent option
+
+    # Before we do anything with the application, see if the
+    # configs specify patching all std routines to be asynch
+    # *ONLY* use this if you are going to wrap the service in
+    # a wsgi container that has enabled gevent, such as
+    # uwsgi with the --gevent option
     if config is not None and config.get('gevent_monkeypatch_all', False):
         print("Monkeypatching std libraries for async")
         from gevent import monkey
+
         monkey.patch_all()
     uwsgi.applications = {'': application}
 except ImportError:

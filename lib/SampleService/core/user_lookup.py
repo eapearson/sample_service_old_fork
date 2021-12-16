@@ -4,16 +4,16 @@
 # it takes a few seconds
 
 import logging
-import requests
+import time
 from typing import List, Sequence, Tuple
 
+import requests
+from cacheout.lru import LRUCache  # type: ignore
+
+from SampleService.core.acls import AdminPermission
 from SampleService.core.arg_checkers import not_falsy as _not_falsy
 from SampleService.core.arg_checkers import not_falsy_in_iterable as _no_falsy_in_iterable
-from SampleService.core.acls import AdminPermission
 from SampleService.core.user import UserID
-
-import time
-from cacheout.lru import LRUCache # type: ignore
 
 
 class KBaseUserLookup:
@@ -25,9 +25,9 @@ class KBaseUserLookup:
             auth_token: str,
             full_admin_roles: List[str] = None,
             read_admin_roles: List[str] = None,
-            cache_max_size: int=10000,
-            cache_admin_expiration: int=300,
-            cache_valid_expiration: int=3600):
+            cache_max_size: int = 10000,
+            cache_admin_expiration: int = 300,
+            cache_valid_expiration: int = 3600):
         '''
         Create the client.
         :param auth_url: The root url of the authentication service.
@@ -50,9 +50,9 @@ class KBaseUserLookup:
         self._read_roles = set(read_admin_roles) if read_admin_roles else set()
         self._cache_timer = time.time
         self._admin_cache = LRUCache(timer=self._cache_timer, maxsize=cache_max_size,
-            ttl=cache_admin_expiration)
+                                     ttl=cache_admin_expiration)
         self._valid_cache = LRUCache(timer=self._cache_timer, maxsize=cache_max_size,
-            ttl=cache_valid_expiration)
+                                     ttl=cache_valid_expiration)
 
         # Auth 0.4.1 needs to be deployed before this will work
         # r = requests.get(self._url, headers={'Accept': 'application/json'})
@@ -64,6 +64,8 @@ class KBaseUserLookup:
         # could use the server time to adjust for clock skew, probably not worth the trouble
 
         # check token is valid
+        # Note that this call is a noop; it is just a call to an an endpoint which requires a valid
+        # token.
         r = requests.get(
             self._user_url, headers={'Accept': 'application/json', 'authorization': self._token})
         self._check_error(r)
@@ -96,7 +98,7 @@ class KBaseUserLookup:
         '''
         Check whether users exist in the authentication service.
 
-        :param users: the users to check.
+        :param usernames: the users to check.
         :returns: A list of users that have legal usernames but do not exist in the authentication
             service.
         :raises InvalidTokenError: if the token has expired
@@ -135,7 +137,7 @@ class KBaseUserLookup:
 
         admin_cache = self._admin_cache.get(token, default=False)
         if admin_cache:
-            return admin_cache 
+            return admin_cache
         r = requests.get(self._me_url, headers={'Authorization': token})
         self._check_error(r)
         j = r.json()

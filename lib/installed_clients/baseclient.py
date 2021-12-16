@@ -163,6 +163,7 @@ class BaseClient(object):
                     'version': '1.1',
                     'id': str(_random.random())[2:]
                     }
+        print('[_call] params', arg_hash)
         if context:
             if type(context) is not dict:
                 raise ValueError('context is not type dict as required.')
@@ -173,9 +174,13 @@ class BaseClient(object):
                              timeout=self.timeout,
                              verify=not self.trust_all_ssl_certificates)
         ret.encoding = 'utf-8'
+        print('[_call] response', ret, ret.text)
         if ret.status_code == 500:
-            if ret.headers.get(_CT) == _AJ:
+            print('ERROR', ret.headers)
+            if ret.headers.get(_CT).startswith(_AJ):
+                print('ERROR json')
                 err = ret.json()
+                print('ERROR json', err)
                 if 'error' in err:
                     raise ServerError(**err['error'])
                 else:

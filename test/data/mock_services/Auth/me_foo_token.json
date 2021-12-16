@@ -1,0 +1,28 @@
+
+{
+    "created": 1578347292120,
+    "lastlogin": 1629376312702,
+    "display": "Foo",
+    "roles": [],
+    "customroles": [],
+    "policyids": [
+        {
+            "id": "data-policy.1",
+            "agreedon": 1578347292120
+        },
+        {
+            "id": "kbase-user.1",
+            "agreedon": 1578347292120
+        }
+    ],
+    "user": "foo",
+    "local": false,
+    "email": "eapearson+kbaseuitest@lbl.gov",
+    "idents": [
+        {
+            "provusername": "kbaseuitest@globusid.org",
+            "provider": "Globus",
+            "id": "91436b502ec80a8165c6691ca8a64029"
+        }
+    ]
+}

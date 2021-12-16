@@ -6,6 +6,9 @@ auth-service-url = {{ default .Env.auth_service_url "https://ci.kbase.us/service
 auth-service-url-allow-insecure = {{ default .Env.auth_service_url_allow_insecure "false" }}
 scratch = /kb/module/work/tmp
 
+# Store own url, for testing.
+sample-service-url = {{ default .Env.sample_service_url "http://sampleservice:5000" }}
+
 # Location and credentials for the KBase Authentication service.
 # auth-root-url is the KBase auth service root url, e.g. https://kbase.us/services/auth
 # auth-token is any valid auth token for the sample service to use for user lookups. A service
@@ -80,3 +83,9 @@ metadata-validator-config-url = {{ default .Env.metadata_validator_config_url "h
 # kafka-bootstrap-servers is provided. Legal characters are alphanumerics and the hyphen.
 kafka-bootstrap-servers = {{ default .Env.kafka_bootstrap_servers "" }}
 kafka-topic = {{ default .Env.kafka_topic "" }}
+
+#
+# Database consistency checker
+#
+consistency-checker-enabled = {{ default .Env.consistency_checker_enabled "false" }}
+consistency-checker-interval = {{ default .Env.consistency_checker_interval 60 }}

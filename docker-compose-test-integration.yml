@@ -1,0 +1,12 @@
+version: "3.8"
+
+# This docker-compose is for developer workflows, not for running in production.
+networks:
+  kbase-dev:
+    name: kbase-dev
+services:
+  test:
+    depends_on:
+      - sampleservice
+    networks:
+      - kbase-dev

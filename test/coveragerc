@@ -1,4 +1,5 @@
 [run]
+include = lib/SampleService/*
 omit =
     */__init__.py
     */SampleServiceServer.py

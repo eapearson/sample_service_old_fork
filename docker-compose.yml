@@ -1,0 +1,111 @@
+version: "3.8"
+
+# This docker-compose is for developer workflows, not for running in production.
+networks:
+  kbase-dev:
+    name: kbase-dev
+services:
+  sampleservice:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - arangodb
+      - kafka
+      - mockservices
+    networks:
+      - kbase-dev
+    ports:
+      - "5000:5000"
+    volumes:
+      - "${PWD}:/kb/module"
+    #      - "${PWD}/test:/kb/module/test"
+    environment:
+      # TODO: move to .env file; makes this file smaller, and allows us to swap out envs
+      # for different use cases.
+      #
+      # arango
+      - arango_url=http://arangodb:8529
+      # NOTE: must be matched with db created in prepare-arango.py
+      - arango_db=test_db
+      - arango_user=test
+      - arango_pwd=test123
+      # auth
+      - auth_root_url=http://mockservices:3333/services/auth
+      - auth_service_url=http://mockservices:3333/services/auth/api/legacy/KBase/Sessions/Login
+      - auth_token=SERVICETOKENXXXXXXXXXXXXXXXXXXXX
+      # kafka
+      - kafka_bootstrap_servers=kafka:9092
+      - kafka_topic=sampleservice
+      - kbase_endpoint=foo
+      # workspace
+      - workspace_read_admin_token=workspace_read_admin_token
+      - workspace_url=http://mockservices:3333/services/ws
+      # github and specs
+      # TODO: Replace with env variable so we can use the normal source, or
+      #       a local testing config.
+      - metadata_validator_config_url=file:///kb/module/test/data/metadata_validation.yml
+      # - specs_github_repo
+      # - specs_github_branch
+      # - github_token
+      #
+      # Test configuration
+      #
+      - auth_read_admin_roles=readadmin1,readadmin2
+      - auth_full_admin_roles=fulladmin1,fulladmin2
+      #
+      # db consistency checker
+      #
+      - consistency_checker_enabled=false
+      - consistency_checker_interval=60
+    command: [ 'test' ]
+
+  # Arangodb server in cluster mode
+  arangodb:
+    image: arangodb:3.5
+    networks:
+      - kbase-dev
+    ports:
+      - "127.0.0.1:8529:8529"
+    #    volumes:
+    #      - "${PWD}/logs/arangodb/:/var/log/arangodb3"
+    environment:
+      - ARANGO_NO_AUTH=1
+    command: sh -c "arangodb --starter.local"
+
+  # Kafka setup, see https://hub.docker.com/r/bitnami/kafka
+  zookeeper:
+    image: bitnami/zookeeper:latest
+    networks:
+      - kbase-dev
+    ports:
+      - "2181:2181"
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+
+  kafka:
+    image: "bitnami/kafka:2.8.0"
+    depends_on:
+      - zookeeper
+    networks:
+      - kbase-dev
+    ports:
+      - "127.0.0.1:9093:9093"
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      # For clients
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CLIENT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_LISTENERS=CLIENT://:9092,EXTERNAL://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=CLIENT://kafka:9092,EXTERNAL://localhost:9093
+      - KAFKA_INTER_BROKER_LISTENER_NAME=CLIENT
+
+  mockservices:
+    image: ghcr.io/eapearson/kbase-mock-services:main
+    ports:
+      - "3333:3333"
+    volumes:
+      # The container expects all mock data to be in /data
+      - ${MOCK_DATASET_PATH}:/data
+    networks:
+      - kbase-dev

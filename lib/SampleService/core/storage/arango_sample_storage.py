@@ -1,7 +1,6 @@
-'''
+"""
 An ArangoDB based storage system for the Sample service.
-'''
-
+"""
 
 #                          READ BEFORE CHANGING STUFF
 #
@@ -65,35 +64,27 @@ An ArangoDB based storage system for the Sample service.
 
 # may need to extract an interface at some point, YAGNI for now.
 
-import arango as _arango
 import datetime
 import hashlib as _hashlib
 import uuid as _uuid  # lgtm [py/import-and-import-from]
-from uuid import UUID
 from collections import defaultdict
-from typing import List, Tuple, Callable, cast as _cast, Optional, Sequence as _Sequence
 from typing import Dict as _Dict, Any as _Any
+from typing import List, Tuple, Callable, cast as _cast, Optional, Sequence as _Sequence
+from uuid import UUID
 
+import arango as _arango
 from apscheduler.schedulers.background import BackgroundScheduler as _BackgroundScheduler
 from arango.database import StandardDatabase
 
 from SampleService.core.acls import SampleACL, SampleACLDelta
-from SampleService.core.core_types import PrimitiveType as _PrimitiveType
-from SampleService.core.data_link import DataLink
-from SampleService.core.sample import (
-    SavedSample,
-    SampleAddress,
-    SourceMetadata as _SourceMetadata,
-    SampleNode as _SampleNode,
-    SubSampleType as _SubSampleType,
-    SampleNodeAddress as _SampleNodeAddress,
-)
 from SampleService.core.arg_checkers import (
     not_falsy as _not_falsy,
     not_falsy_in_iterable as _not_falsy_in_iterable,
     check_string as _check_string,
     check_timestamp as _check_timestamp,
 )
+from SampleService.core.core_types import PrimitiveType as _PrimitiveType
+from SampleService.core.data_link import DataLink
 from SampleService.core.errors import (
     ConcurrencyError as _ConcurrencyError,
     DataLinkExistsError as _DataLinkExistsError,
@@ -103,9 +94,17 @@ from SampleService.core.errors import (
     NoSuchSampleNodeError as _NoSuchSampleNodeError,
     TooManyDataLinksError as _TooManyDataLinksError,
 )
+from SampleService.core.sample import (
+    SavedSample,
+    SampleAddress,
+    SourceMetadata as _SourceMetadata,
+    SampleNode as _SampleNode,
+    SubSampleType as _SubSampleType,
+    SampleNodeAddress as _SampleNodeAddress,
+)
+from SampleService.core.storage.errors import OwnerChangedError as _OwnerChangedError
 from SampleService.core.storage.errors import SampleStorageError as _SampleStorageError
 from SampleService.core.storage.errors import StorageInitError as _StorageInitError
-from SampleService.core.storage.errors import OwnerChangedError as _OwnerChangedError
 from SampleService.core.user import UserID
 from SampleService.core.workspace import DataUnitID, UPA
 
@@ -136,7 +135,6 @@ _FLD_NODE_META_KEY = 'k'
 _FLD_NODE_META_SOURCE_KEY = 'sk'
 _FLD_NODE_META_VALUE = 'v'
 
-
 _FLD_ACLS = 'acls'
 _FLD_OWNER = 'owner'
 _FLD_READ = 'read'
@@ -161,7 +159,7 @@ _FLD_LINK_EXPIRED = 'expired'
 _FLD_LINK_EXPIRED_BY = 'expireby'
 
 # see https://www.arangodb.com/2018/07/time-traveling-with-graph-databases/
-_ARANGO_MAX_INTEGER = 2**53 - 1
+_ARANGO_MAX_INTEGER = 2 ** 53 - 1
 
 _JOB_ID = 'consistencyjob'
 
@@ -178,9 +176,9 @@ _FLD_SCHEMA_VERSION = 'schemaver'
 
 
 class ArangoSampleStorage:
-    '''
+    """
     The ArangoDB storage wrapper.
-    '''
+    """
 
     def __init__(
             self,
@@ -196,8 +194,10 @@ class ArangoSampleStorage:
             # See https://kbase.slack.com/archives/CNRT78G66/p1583967289053500 for justification
             max_links: int = 10000,
             now: Callable[[], datetime.datetime] = lambda: datetime.datetime.now(
-                tz=datetime.timezone.utc)):
-        '''
+                tz=datetime.timezone.utc),
+            enable_scheduler: bool = True
+    ):
+        """
         Create the wrapper.
         Note that the database consistency checker will not start until the
         start_consistency_checker() method is called.
@@ -218,7 +218,7 @@ class ArangoSampleStorage:
             object version to sample nodes will be stored, indicating data links.
         :schema_collection: the name of the collection in which information about the database
             schema will be stored.
-        '''
+        """
         # Don't publicize these params, for testing only
         # :param max_links: The maximum links any one sample version or workspace object version
         # can have.
@@ -252,7 +252,11 @@ class ArangoSampleStorage:
         self._check_schema()
         self._deletion_delay = datetime.timedelta(hours=1)  # make configurable?
         self._check_db_updated()
-        self._scheduler = self._build_scheduler()
+        self._enable_scheduler = enable_scheduler
+        if self._enable_scheduler:
+            self._scheduler = self._build_scheduler()
+        else:
+            self._scheduler = None
 
     def _ensure_indexes(self):
         try:
@@ -339,7 +343,6 @@ class ArangoSampleStorage:
 
     def _delete_version_and_node_docs(self, uuidver, savedate):
         if self._now() - savedate > self._deletion_delay:
-            print('deleting docs', self._now(), savedate, self._deletion_delay)
             try:
                 # TODO logging
                 # delete edge docs first to ensure we don't orphan them
@@ -351,6 +354,16 @@ class ArangoSampleStorage:
                 # this is a real pain to test.
                 raise _SampleStorageError('Connection to database failed: ' + str(e)) from e
 
+    # TODO: This is a source of trouble... it is what leads to the 412 error we get from time to time
+    # and also interferes with testing, as the database is torn down and rebuilt repeatedly while
+    # the server is running.
+    # TODO: At the least, it should be configurable (run it or not).
+    # TODO: Do we even really need it? We should research that.
+    # Possible strategies -
+    # - remove it
+    # - run it less frequently
+    # - lock the service (don't process additional requests) while it is running.
+    # - run it as a separate process
     def _build_scheduler(self):
         schd = _BackgroundScheduler()
         schd.add_job(self._check_db_updated, 'interval', seconds=1, id=_JOB_ID)
@@ -358,25 +371,29 @@ class ArangoSampleStorage:
         return schd
 
     def start_consistency_checker(self, interval_sec=60):
-        '''
+        """
         Start the database consistency checker. In production use the consistency checker
         should always be on.
 
-        :param interval_ms: How frequently to run the scheduler in seconds. Defaults to one minute.
-        '''
+        :param interval_sec: How frequently to run the scheduler in seconds. Defaults to one minute.
+        """
+        if not self._enable_scheduler:
+            return
         if interval_sec < 1:
             raise ValueError('interval_sec must be > 0')
         self._scheduler.reschedule_job(_JOB_ID, trigger='interval', seconds=interval_sec)
         self._scheduler.resume()
 
     def stop_consistency_checker(self):
-        '''
+        """
         Stop the consistency checker.
-        '''
+        """
+        if not self._enable_scheduler:
+            return
         self._scheduler.pause()
 
     def save_sample(self, sample: SavedSample) -> bool:
-        '''
+        """
         Save a new sample. The version in the sample object, if any, is ignored.
 
         The timestamp in the sample is expected to be accurate - the database may become corrupted
@@ -386,7 +403,7 @@ class ArangoSampleStorage:
         :param sample: The sample to save.
         :returns: True if the sample saved successfully, False if the same ID already exists.
         :raises SampleStorageError: if the sample fails to save.
-        '''
+        """
         _not_falsy(sample, 'sample')
         if self._get_sample_doc(sample.id, exception=False):
             return False  # bail early
@@ -568,7 +585,7 @@ class ArangoSampleStorage:
             raise _SampleStorageError('Connection to database failed: ' + str(e)) from e
 
     def save_sample_version(self, sample: SavedSample, prior_version: int = None) -> int:
-        '''
+        """
         Save a new version of a sample. The sample must already exist in the DB. Any version in
         the provided sample object is ignored.
 
@@ -581,7 +598,7 @@ class ArangoSampleStorage:
         :return: the version of the saved sample.
         :raises SampleStorageError: if the sample fails to save.
         :raises ConcurrencyError: if the sample's version is not equal to prior_version.
-        '''
+        """
         _not_falsy(sample, 'sample')
         if prior_version is not None and prior_version < 1:
             raise ValueError('prior_version must be > 0')
@@ -644,7 +661,7 @@ class ArangoSampleStorage:
         return version
 
     def get_sample(self, id_: UUID, version: int = None) -> SavedSample:
-        '''
+        """
         Get a sample from the database.
         :param id_: the ID of the sample.
         :param version: The version of the sample to retrieve. Defaults to the latest version.
@@ -652,7 +669,7 @@ class ArangoSampleStorage:
         :raises NoSuchSampleError: if the sample does not exist.
         :raises NoSuchSampleVersionError: if the sample version does not exist.
         :raises SampleStorageError: if the sample could not be retrieved.
-        '''
+        """
         doc, verdoc, version = self._get_sample_and_version_doc(id_, version)
 
         nodes = self._get_nodes(id_, UUID(verdoc[_FLD_NODE_UUID_VER]), version)
@@ -662,9 +679,9 @@ class ArangoSampleStorage:
             UUID(doc[_FLD_ID]), UserID(verdoc[_FLD_USER]), nodes, dt, verdoc[_FLD_NAME], version)
 
     def get_samples(self, ids_: List[_Dict[str, _Any]]) -> List[SavedSample]:
-        '''
+        """
         ids_: list of dictionaries containing "id" and "version" field.
-        '''
+        """
         docs, verdocs, versions = self._get_many_sample_and_version_doc(ids_)
         samples = []
         for id_tup in ids_:
@@ -703,12 +720,15 @@ class ArangoSampleStorage:
             raise _NoSuchSampleVersionError(f'{id_} ver {version}')
         return doc, UUID(doc[_FLD_VERSIONS][version - 1]), version
 
-    def _get_many_sample_and_version_doc(self, ids_: List[_Dict[str, _Any]]) -> Tuple[_Dict[str, dict], _Dict[str, dict], _Dict[str, int]]:
+    def _get_many_sample_and_version_doc(self, ids_: List[_Dict[str, _Any]]) -> Tuple[
+        _Dict[str, dict], _Dict[str, dict], _Dict[str, int]]:
         docs, versions = self._get_many_sample_doc_and_versions(ids_)
-        verdocs = self._get_many_version_docs([(id_, UUID(doc[_FLD_VERSIONS][versions[id_] - 1])) for id_, doc in docs.items()])  # sends id and version id
+        verdocs = self._get_many_version_docs([(id_, UUID(doc[_FLD_VERSIONS][versions[id_] - 1])) for id_, doc in
+                                               docs.items()])  # sends id and version id
         return (docs, verdocs, versions)
 
-    def _get_many_sample_doc_and_versions(self, ids_: List[_Dict[str, _Any]]) -> Tuple[_Dict[str, dict], _Dict[str, int]]:
+    def _get_many_sample_doc_and_versions(self, ids_: List[_Dict[str, _Any]]) -> Tuple[
+        _Dict[str, dict], _Dict[str, int]]:
         docs = [_cast(dict, doc) for doc in self._get_many_sample_doc(ids_)]
         ret_docs = {}
         ret_versions = {}
@@ -759,7 +779,7 @@ class ArangoSampleStorage:
             raise _SampleStorageError(f'Corrupt DB: Missing version {ver} for sample {id_}')
         return doc
 
-    def _get_many_version_docs(self, ids_, exception: bool=True) -> _Dict[str, dict]:
+    def _get_many_version_docs(self, ids_, exception: bool = True) -> _Dict[str, dict]:
         version_ids = [self._get_version_id(id_, ver) for id_, ver in ids_]
         ver_docs = self._get_many_docs(self._col_version, version_ids)
         if not ver_docs:
@@ -792,7 +812,7 @@ class ArangoSampleStorage:
                     self._list_to_meta(n[_FLD_NODE_UNCONTROLLED_METADATA]),
                     # allow for compatatibility with old samples without a source meta field
                     self._list_to_source_meta(n.get(_FLD_NODE_SOURCE_METADATA)),
-                    )
+                )
         except _arango.exceptions.DocumentGetError as e:  # this is a pain to test
             raise _SampleStorageError('Connection to database failed: ' + str(e)) from e
         # could check for keyerror here if nodes were deleted, but db is corrupt either way
@@ -809,7 +829,7 @@ class ArangoSampleStorage:
             return None
         return doc
 
-    def _get_many_sample_doc(self, ids_: List[_Dict[str, _Any]], exception: bool=True) -> List[dict]:
+    def _get_many_sample_doc(self, ids_: List[_Dict[str, _Any]], exception: bool = True) -> List[dict]:
         docs = self._get_many_docs(self._col_sample, [str(_not_falsy(id_['id'], 'id_')) for id_ in ids_])
         if not docs:
             if exception:
@@ -823,20 +843,20 @@ class ArangoSampleStorage:
         except _arango.exceptions.DocumentGetError as e:  # this is a pain to test
             raise _SampleStorageError('Connection to database failed: ' + str(e)) from e
 
-    def _get_many_docs(self, col, ids_:List[str]) -> List[dict]:
+    def _get_many_docs(self, col, ids_: List[str]) -> List[dict]:
         try:
             return col.get_many(ids_)
         except _arango.exceptions.DocumentGetError as e:  # this is a pain to test
             raise _SampleStorageError('Connection to database failed: ' + str(e)) from e
 
     def get_sample_acls(self, id_: UUID) -> SampleACL:
-        '''
+        """
         Get a sample's acls from the database.
         :param id_: the ID of the sample.
         :returns: the sample acls.
         :raises NoSuchSampleError: if the sample does not exist.
         :raises SampleStorageError: if the sample could not be retrieved.
-        '''
+        """
         # return no class for now, might need later
         doc = _cast(dict, self._get_sample_doc(id_))
         acls = doc[_FLD_ACLS]
@@ -850,7 +870,7 @@ class ArangoSampleStorage:
             acls.get(_FLD_PUBLIC_READ))
 
     def replace_sample_acls(self, id_: UUID, acls: SampleACL):
-        '''
+        """
         Completely replace a sample's ACLs.
 
         The owner may not be changed via this method, but is required to ensure the owner has
@@ -864,7 +884,7 @@ class ArangoSampleStorage:
         :raises SampleStorageError: if the sample could not be retrieved.
         :raises OwnerChangedException: if the owner in the database is not the same as the owner
             in the provided ACLs.
-        '''
+        """
         _not_falsy(id_, 'id_')
         _not_falsy(acls, 'acls')
         # Could return a subset of s to save bandwith
@@ -901,7 +921,7 @@ class ArangoSampleStorage:
 
     def update_sample_acls(
             self, id_: UUID, update: SampleACLDelta, update_time: datetime.datetime) -> None:
-        '''
+        """
         Update a sample's ACLs via a delta specification.
 
         :param id_: the sample ID.
@@ -910,7 +930,7 @@ class ArangoSampleStorage:
         :raises NoSuchSampleError: if the sample does not exist.
         :raises SampleStorageError: if the sample could not be retrieved.
         :raises UnauthorizedError: if the update attempts to alter the sample owner.
-        '''
+        """
         # Needs to ensure owner is not added to another ACL
         # could make an option to just ignore the update to the owner? YAGNI for now.
         _not_falsy(update, 'update')
@@ -1020,7 +1040,7 @@ class ArangoSampleStorage:
             raise _SampleStorageError('Connection to database failed: ' + str(e)) from e
 
     def create_data_link(self, link: DataLink, update: bool = False) -> Optional[UUID]:
-        '''
+        """
         Link data in the workspace to a sample.
         Each data unit can be linked to only one sample at a time. Expired links may exist to
         other samples.
@@ -1047,7 +1067,7 @@ class ArangoSampleStorage:
         :raises DataLinkExistsError: if a link already exists from the data unit.
         :raises TooManyDataLinksError: if there are too many links from the sample version or
             the workspace object version.
-        '''
+        """
         # may want to link non-ws data at some point, would need a data source ID? YAGNI for now
 
         # Using the REST streaming api for the transaction. Might be faster with javascript
@@ -1106,7 +1126,8 @@ class ArangoSampleStorage:
                 # I'm not a fan of this, but a millisecond gap seems safe and most systems
                 # should have millisecond resolution.
                 # Consider rounding to millisecond resolution for consistency? Make a class?
-                oldlinkdoc[_FLD_LINK_EXPIRED] = self._timestamp_seconds_to_milliseconds(link.created.timestamp() - 0.001)
+                oldlinkdoc[_FLD_LINK_EXPIRED] = self._timestamp_seconds_to_milliseconds(
+                    link.created.timestamp() - 0.001)
                 oldlinkdoc[_FLD_ARANGO_KEY] = self._create_link_key_from_link_doc(oldlinkdoc)
 
                 # since we're replacing a link we don't need to worry about counting links from
@@ -1201,7 +1222,8 @@ class ArangoSampleStorage:
     def _count_links(self, db, filters: str, bind_vars, created, expired):
         bind_vars['@col'] = self._col_data_link.name
         bind_vars['created'] = self._timestamp_seconds_to_milliseconds(created.timestamp())
-        bind_vars['expired'] = self._timestamp_seconds_to_milliseconds(expired.timestamp()) if expired else _ARANGO_MAX_INTEGER
+        bind_vars['expired'] = self._timestamp_seconds_to_milliseconds(
+            expired.timestamp()) if expired else _ARANGO_MAX_INTEGER
         # might need to include created / expired in compound indexes if we get a ton of expired
         # links. Might not work in a NOT though. Alternate formulation is
         # (d.creatd >= @created AND d.created <= @expired) OR
@@ -1236,7 +1258,7 @@ class ArangoSampleStorage:
     def _create_link_key_from_link_doc(self, link: dict):
         # arango sometimes removes trailing decimals and zeros from the number so we reformat
         # with datetime to ensure consistency
-        created=self._timestamp_milliseconds_to_seconds(link[_FLD_LINK_CREATED])
+        created = self._timestamp_milliseconds_to_seconds(link[_FLD_LINK_CREATED])
         cr = (f'_{self._timestamp_to_datetime(created).timestamp()}'
               if link[_FLD_LINK_EXPIRED] != _ARANGO_MAX_INTEGER else '')
         dataid = (f'_{self._md5(link[_FLD_LINK_OBJECT_DATA_UNIT])}'
@@ -1258,7 +1280,8 @@ class ArangoSampleStorage:
             _FLD_ARANGO_TO: f'{self._col_nodes.name}/{nodeid}',
             _FLD_LINK_CREATED: self._timestamp_seconds_to_milliseconds(link.created.timestamp()),
             _FLD_LINK_CREATED_BY: link.created_by.id,
-            _FLD_LINK_EXPIRED: self._timestamp_seconds_to_milliseconds(link.expired.timestamp()) if link.expired else _ARANGO_MAX_INTEGER,
+            _FLD_LINK_EXPIRED: self._timestamp_seconds_to_milliseconds(
+                link.expired.timestamp()) if link.expired else _ARANGO_MAX_INTEGER,
             _FLD_LINK_EXPIRED_BY: link.expired_by.id if link.expired_by else None,
             _FLD_LINK_ID: str(link.id),
             _FLD_LINK_WORKSPACE_ID: upa.wsid,
@@ -1300,7 +1323,7 @@ class ArangoSampleStorage:
             expired_by: UserID,
             id_: UUID = None,
             duid: DataUnitID = None) -> DataLink:
-        '''
+        """
         Expire a data link. The link can be addressed by its ID or the DUID, since for a non-
         expired link the DUID is a unique identifier. Providing both IDs is an error.
 
@@ -1311,7 +1334,7 @@ class ArangoSampleStorage:
         :param duid: the data unit ID from which the link originates.
         :returns: the updated link.
         :raises NoSuchLinkError: if the link does not exist or is already expired.
-        '''
+        """
         # See notes for creating links re the transaction approach.
         _check_timestamp(expired, 'expired')
         _not_falsy(expired_by, 'expired_by')
@@ -1386,7 +1409,7 @@ class ArangoSampleStorage:
             self._abort_transaction(tdb)
 
     def get_data_link(self, id_: UUID = None, duid: DataUnitID = None) -> DataLink:
-        '''
+        """
         Get a link by its ID or Data Unit ID. The latter can only retrieve non-expired links.
         Exactly one of the ID or DUID must be specified.
 
@@ -1394,7 +1417,7 @@ class ArangoSampleStorage:
         :param duid: the link DUID.
         :returns: the link.
         :raises NoSuchLinkError: if the link does not exist.
-        '''
+        """
         if not bool(id_) ^ bool(duid):  # xor
             raise ValueError('exactly one of id_ or duid must be provided')
         if id_:
@@ -1414,7 +1437,8 @@ class ArangoSampleStorage:
                 doc[_FLD_LINK_SAMPLE_NODE]),
             self._timestamp_to_datetime(self._timestamp_milliseconds_to_seconds(doc[_FLD_LINK_CREATED])),
             UserID(doc[_FLD_LINK_CREATED_BY]),
-            None if ex == _ARANGO_MAX_INTEGER else self._timestamp_to_datetime(self._timestamp_milliseconds_to_seconds(ex)),
+            None if ex == _ARANGO_MAX_INTEGER else self._timestamp_to_datetime(
+                self._timestamp_milliseconds_to_seconds(ex)),
             UserID(doc[_FLD_LINK_EXPIRED_BY]) if doc[_FLD_LINK_EXPIRED_BY] else None
         )
 
@@ -1430,7 +1454,7 @@ class ArangoSampleStorage:
             sample: SampleAddress,
             readable_wsids: Optional[List[int]],
             timestamp: datetime.datetime) -> List[DataLink]:
-        '''
+        """
         Get the links from a sample at a particular time.
 
         :param sample: the sample of interest.
@@ -1440,7 +1464,7 @@ class ArangoSampleStorage:
         :returns: a list of links.
         :raises NoSuchSampleError: if the sample does not exist.
         :raises NoSuchSampleVersionError: if the sample version does not exist.
-        '''
+        """
         # may want to make this work on non-ws objects at some point. YAGNI for now.
         _not_falsy(sample, 'sample')
         _check_timestamp(timestamp, 'timestamp')
@@ -1483,13 +1507,13 @@ class ArangoSampleStorage:
         return duids  # a maxium of 10k can be returned based on the link creation function
 
     def get_links_from_data(self, upa: UPA, timestamp: datetime.datetime) -> List[DataLink]:
-        '''
+        """
         Get links originating from a data object. The data object is not checked for existence.
 
         :param upa: the address of the data object.
         :param timestamp: the time to use to determine which links are active.
         :returns: a list of links.
-        '''
+        """
         # the UPA makes it workspace specific, may need to make it generic later. YAGNI for now.
         _not_falsy(upa, 'upa')
         _check_timestamp(timestamp, 'timestamp')
@@ -1512,7 +1536,7 @@ class ArangoSampleStorage:
         return self._find_links_via_aql(q, bind_vars)
 
     def has_data_link(self, upa: UPA, sample: UUID) -> bool:
-        '''
+        """
         Check if a link exists or has ever existed between an object and a sample. The sample and
         object are not checked for existence.
 
@@ -1520,7 +1544,7 @@ class ArangoSampleStorage:
         :param sample: the sample to check.
         :returns: True if a link has ever existed between the sample and the object, or False
             otherwise.
-        '''
+        """
         # Again, this is fairly workspace specific. May want to generalize at some point.
         # YAGNI for now.
         _not_falsy(upa, 'upa')

@@ -2,13 +2,15 @@
 Contains a Sample Service metadata validator class.
 '''
 
-import maps as _maps
 from typing import Dict, List, Callable, Optional, Tuple as _Tuple
+
+import maps as _maps
 from pygtrie import CharTrie as _CharTrie
+
 from SampleService.core.arg_checkers import not_falsy as _not_falsy
 from SampleService.core.core_types import PrimitiveType
-from SampleService.core.errors import MetadataValidationError as _MetadataValidationError
 from SampleService.core.errors import IllegalParameterError as _IllegalParameterError
+from SampleService.core.errors import MetadataValidationError as _MetadataValidationError
 from SampleService.core.validator.builtin import ValidatorMessage
 
 
@@ -152,7 +154,7 @@ class MetadataValidatorSet:
             self,
             keys: List[str],
             exact_match: bool = True
-            ) -> Dict[str, Dict[str, PrimitiveType]]:
+    ) -> Dict[str, Dict[str, PrimitiveType]]:
         '''
         Get any metdata associated with the specified prefix keys.
 
@@ -201,7 +203,7 @@ class MetadataValidatorSet:
             key: str,
             index: int,
             value: Dict[str, PrimitiveType]
-            ) -> Optional[ValidatorMessage]:
+    ) -> Optional[ValidatorMessage]:
         '''
         Call a particular validator for a metadata key.
         :param key: the key for which a validator should be called.
@@ -223,7 +225,7 @@ class MetadataValidatorSet:
             index: int,
             key: str,
             value: Dict[str, PrimitiveType]
-            ) -> Optional[ValidatorMessage]:
+    ) -> Optional[ValidatorMessage]:
         '''
         Call a particular validator for a metadata key prefix.
         :param prefix: the prefix for which a valiator should be called.
@@ -243,7 +245,7 @@ class MetadataValidatorSet:
     def build_error_detail(self, message, dev_message=None, node=None, key=None, subkey=None, sample=None):
         return {
             'message': message,
-            'dev_message': dev_message if dev_message!=None else message,
+            'dev_message': dev_message if dev_message != None else message,
             'key': key,
             'subkey': subkey,
             'node': node,
@@ -253,8 +255,8 @@ class MetadataValidatorSet:
     def validate_metadata(
             self,
             metadata: Dict[str, Dict[str, PrimitiveType]],
-            return_error_detail: bool=False
-        ):
+            return_error_detail: bool = False
+    ):
         '''
         Validate a set of metadata key/value pairs.
 
@@ -301,7 +303,9 @@ class MetadataValidatorSet:
                     else:
                         raise _MetadataValidationError(f'Key {k}: ' + msg)
             for p in self._prefix_vals.prefixes(k):
+                # Here we are looking at each prefix validator p matched by the metadata field key k
                 for f in p.value:
+                    # TODO: Sort this out; does a prefix validator have 2 or 3 parameters?
                     error = f(p.key, k, metadata[k])
                     if error:
                         if return_error_detail:

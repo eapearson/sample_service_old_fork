@@ -1,40 +1,40 @@
-'''
+"""
 Configuration parsing and creation for the sample service.
-'''
+"""
 
 # Because creating the samples instance involves contacting arango and the auth service,
 # this code is mostly tested in the integration tests.
 
 import importlib
+import urllib as _urllib
 from typing import Dict, Optional, List, Tuple
 from typing import cast as _cast
-import urllib as _urllib
 from urllib.error import URLError as _URLError
-import yaml as _yaml
-from yaml.parser import ParserError as _ParserError
-from jsonschema import validate as _validate
-import arango as _arango
 
-from SampleService.core.validator.metadata_validator import MetadataValidatorSet
-from SampleService.core.validator.metadata_validator import MetadataValidator as _MetadataValidator
+import arango as _arango
+import yaml as _yaml
+from installed_clients.WorkspaceClient import Workspace as _Workspace
+from jsonschema import validate as _validate
+from yaml.parser import ParserError as _ParserError
+
+from SampleService.core.arg_checkers import check_string as _check_string
+from SampleService.core.notification import KafkaNotifier as _KafkaNotifer
 from SampleService.core.samples import Samples
 from SampleService.core.storage.arango_sample_storage import ArangoSampleStorage \
     as _ArangoSampleStorage
-from SampleService.core.arg_checkers import check_string as _check_string
-from SampleService.core.notification import KafkaNotifier as _KafkaNotifer
 from SampleService.core.user_lookup import KBaseUserLookup
+from SampleService.core.validator.metadata_validator import MetadataValidator as _MetadataValidator
+from SampleService.core.validator.metadata_validator import MetadataValidatorSet
 from SampleService.core.workspace import WS as _WS
-
-from installed_clients.WorkspaceClient import Workspace as _Workspace
 
 
 def build_samples(config: Dict[str, str]) -> Tuple[Samples, KBaseUserLookup, List[str]]:
-    '''
+    """
     Build the sample service instance from the SDK server provided parameters.
 
-    :param cfg: The SDK generated configuration.
+    :param config: The SDK generated configuration.
     :returns: A samples instance.
-    '''
+    """
     if not config:
         raise ValueError('config is empty, cannot start service')
     arango_url = _check_string_req(config.get('arango-url'), 'config param arango-url')
@@ -125,7 +125,14 @@ def build_samples(config: Dict[str, str]) -> Tuple[Samples, KBaseUserLookup, Lis
         col_data_link,
         col_schema,
     )
-    storage.start_consistency_checker()
+
+    enable_consistency_checker = config.get('consistency-checker-enabled') == "true"
+    if enable_consistency_checker:
+        consistency_checker_interval = int(config.get('consistency-checker-interval', "60"))
+        print(f'Starting consistency checker with interval {consistency_checker_interval}')
+        storage.start_consistency_checker(consistency_checker_interval)
+    else:
+        print(f'Not starting consistency checker')
     kafka = _KafkaNotifer(kafka_servers, _cast(str, kafka_topic)) if kafka_servers else None
     user_lookup = KBaseUserLookup(auth_root_url, auth_token, full_roles, read_roles)
     ws = _WS(_Workspace(ws_url, token=ws_token))
@@ -133,14 +140,14 @@ def build_samples(config: Dict[str, str]) -> Tuple[Samples, KBaseUserLookup, Lis
 
 
 def split_value(d: Dict[str, str], key: str):
-    '''
+    """
     Get a list of comma separated values given a string taken from a configuration dict.
     :param config: The configuration dict containing the string to be processed as a value.
     :param key: The key in the dict containing the value.
     :returns: a list of strings split from the source comma separated string, or an empty list
     if the key does not exist or contains only whitespace.
     :raises ValueError: if the value contains control characters.
-    '''
+    """
     if d is None:
         raise ValueError('d cannot be None')
     rstr = _check_string(d.get(key), 'config param ' + key, optional=True)
@@ -199,13 +206,13 @@ _META_VAL_JSONSCHEMA = {
 
 
 def get_validators(url: str) -> MetadataValidatorSet:
-    '''
+    """
     Given a url pointing to a config file, initialize any metadata validators present
     in the configuration.
 
     :param url: The URL for a config file for the metadata validators.
     :returns: A set of metadata validators.
-    '''
+    """
     # TODO VALIDATOR make validator CLI
     try:
         with _urllib.request.urlopen(url) as res:
@@ -243,6 +250,6 @@ def _get_validators(cfg, name_, metaval_func) -> List[_MetadataValidator]:
             except Exception as e:
                 raise ValueError(
                     f'{name_} validator callable build #{i} failed for key {key}: {e.args[0]}'
-                    ) from e
+                ) from e
         mvals.append(metaval_func(key, lvals, meta))
     return mvals

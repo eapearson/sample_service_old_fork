@@ -1,0 +1,35 @@
+# Test data extracted from test code.
+---
+validators:
+  foo:
+    validators:
+      - module: SampleService.core.validator.builtin
+        callable_builder: noop
+    key_metadata:
+      a: b
+      c: d
+  stringlentest:
+    validators:
+      - module: SampleService.core.validator.builtin
+        callable_builder: string
+        parameters:
+          max-len: 5
+      - module: SampleService.core.validator.builtin
+        callable_builder: string
+        parameters:
+          keys: spcky
+          max-len: 2
+    key_metadata:
+      h: i
+      j: k
+prefix_validators:
+  bar:
+    validators:
+      - module: core.config_test_vals
+        callable_builder: prefix_validator_string_builder
+        parameters:
+          max-len: 10
+    key_metadata:
+      a: b
+      c: 1
+

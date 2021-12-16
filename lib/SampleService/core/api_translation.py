@@ -171,7 +171,7 @@ def validate_samples_params(params: Dict[str, Any]) -> List[Sample]:
     '''
     Process the input from the validate_samples API call and translate it into standard types.
 
-    :param params: The unmarshalled JSON recieved from the API as part of the create_sample
+    :param params: The un-marshalled JSON received from the API as part of the create_sample
         call.
     :returns: A tuple of the sample to save, the UUID of the sample for which a new version should
         be created or None if an entirely new sample should be created, and the previous version
@@ -507,6 +507,7 @@ def get_static_key_metadata_params(params: Dict[str, Any]) -> Tuple[List[str], O
         if type(k) != str:
             raise _IllegalParameterError(f'index {i} of keys is not a string')
     prefix = params.get('prefix')
+    # TODO: `twould be cleaner to have "prefix" and "exact"
     pre: Optional[bool]
     if not prefix:
         pre = False
