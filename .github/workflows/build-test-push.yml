@@ -56,8 +56,14 @@ jobs:
           echo "BUILD_DATE=${{ env.BUILD_DATE }}"
 
       # Run unit tests
+      - name: Run test begin tasks
+        run: make host-test-begin
+
       - name: Run unit tests
-        run: make host-tests
+        run: make host-test-unit
+      
+      - name: Run test end tasks
+        run: make host-test-end
 
       - name: Cheap Coverage Report
         uses: devmasx/coverage-check-action@v1.2.0

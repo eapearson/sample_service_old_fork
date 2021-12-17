@@ -17,7 +17,6 @@ from testing.shared.common import (
     TEST_DB_NAME,
     TEST_PWD,
     TEST_USER,
-    create_deploy_cfg,
 )
 from testing.shared.test_constants import (
     ARANGODB_URL,
@@ -32,32 +31,43 @@ def delete_test_db(arango_client):
     system_db.delete_database(TEST_DB_NAME)
 
 
-DB_USED = False
-
-
 def create_test_db(arango_client):
     system_db = arango_client.db("_system")  # default access to _system db
+    try:
+        system_db.delete_database(TEST_DB_NAME)
+    except Exception:
+        # we don't care if we had to zap a previous test database
+        pass
     system_db.create_database(
         TEST_DB_NAME, [{"username": TEST_USER, "password": TEST_PWD}]
     )
     return arango_client.db(TEST_DB_NAME, TEST_USER, TEST_PWD)
 
 
-def clear_db_and_recreate(arango_client):
-    global DB_USED
-    try:
-        delete_test_db(arango_client)
-    except Exception as e:
-        # First time through, there is probably no db to delete, so an error is thrown;
-        # just absorb it. But maybe there is (from a remnant of a previous failed test),
-        # so we try anyway.
-        # TODO: it would be cleaner to check if the db exists first?
-        if DB_USED:
-            raise e
-        else:
-            pass
+def reset_collections(db):
+    drop_collections(db)
+    create_collections(db)
+    return db
 
-    db = create_test_db(arango_client)
+
+def drop_collections(db):
+    print("DROPPING COLLECTIONS")
+    try:
+        db.delete_collection(TEST_COL_SAMPLE)
+        db.delete_collection(TEST_COL_VERSION)
+        db.delete_collection(TEST_COL_VER_EDGE)
+        db.delete_collection(TEST_COL_NODES)
+        db.delete_collection(TEST_COL_NODE_EDGE)
+        db.delete_collection(TEST_COL_DATA_LINK)
+        db.delete_collection(TEST_COL_WS_OBJ_VER)
+        db.delete_collection(TEST_COL_SCHEMA)
+    except Exception:
+        pass
+    return db
+
+
+def create_collections(db):
+    print("CREATING COLLECTIONS")
     db.create_collection(TEST_COL_SAMPLE)
     db.create_collection(TEST_COL_VERSION)
     db.create_collection(TEST_COL_VER_EDGE, edge=True)
@@ -66,7 +76,6 @@ def clear_db_and_recreate(arango_client):
     db.create_collection(TEST_COL_DATA_LINK, edge=True)
     db.create_collection(TEST_COL_WS_OBJ_VER)
     db.create_collection(TEST_COL_SCHEMA)
-    DB_USED = True
     return db
 
 
@@ -102,17 +111,11 @@ def samplestorage_method(arango):
 # Generally, some fixtures can be reset for each test module, others need to
 # be clean at the beginning of each test.
 #
-# This does slow down tests a lot!
-#
 # We may be able to move some tests
 #
 
-#
-# Module scope
-#
 
-
-@fixture(scope="module")
+@fixture(scope="session")
 def temp_dir():
     tempdir = test_utils.get_temp_dir()
     yield tempdir
@@ -121,48 +124,41 @@ def temp_dir():
         remove_all_files(test_utils.get_temp_dir())
 
 
-@fixture(scope="module")
+@fixture(scope="session")
 def kafka_host():
     yield f"{KAFKA_HOST}"
 
 
-@fixture(scope="module")
+@fixture(scope="session")
 def arango():
     client = ArangoClient(hosts=f"{ARANGODB_URL}")
     yield client
 
 
-@fixture(scope="module")
+@fixture(scope="session")
 def workspace_url():
     yield f"{MOCK_SERVICES_URL}/services/ws"
 
 
-@fixture(scope="module")
+@fixture(scope="session")
 def auth_url():
     yield f"{MOCK_SERVICES_URL}/services/auth"
 
 
-#
-# Function scope
-#
-
-
-def reset_db(arango):
-    db = clear_db_and_recreate(arango)
-    config_path = create_deploy_cfg()
-    os.environ["KB_DEPLOYMENT_CONFIG"] = config_path
-    return db
+@fixture(scope="session")
+def test_db(arango):
+    yield create_test_db(arango)
 
 
 @fixture(scope="function")
-def sample_service(arango):
-    db = reset_db(arango)
+def sample_service(test_db):
+    db = reset_collections(test_db)
     yield {"url": SAMPLE_SERVICE_URL, "db": db}
 
 
 @fixture(scope="function")
-def sample_service_db(arango):
-    yield reset_db(arango)
+def sample_service_db(test_db):
+    yield reset_collections(test_db)
 
 
 @fixture(scope="function")

@@ -153,9 +153,8 @@ host-test-unit:
 	@echo "Running unit tests..."
 	docker compose -f docker-compose-test.yml run test test-unit
 	docker compose -f docker-compose-test.yml rm -f
-	@echo "DONE"
+	@echo "Unit tests done"
 
-host-tests: host-test-begin host-test-unit host-test-end
 
 
 #
@@ -163,18 +162,26 @@ host-tests: host-test-begin host-test-unit host-test-end
 # docker-compose-test-integration.yml adds support for integrating with the main docker compose services
 # Note: MOCK_DATASET_PATH needs to be set 
 #
-host-test-integration:
-	@echo "Running unit tests..."
+host-test-integration-start:
+	@echo "Starting integration test stack"
 	docker compose -f docker-compose.yml -f docker-compose-test.yml -f docker-compose-test-integration.yml run test test-integration
+	@echo "DONE"
+
+host-test-integration-stop:
+	@echo "Stopping integration test stack"
 	docker compose -f docker-compose.yml -f docker-compose-test.yml -f docker-compose-test-integration.yml stop
 	docker compose -f docker-compose.yml -f docker-compose-test.yml -f docker-compose-test-integration.yml rm -f
-	@echo "DONE"
+	@echo "Integration test stack stopped"
+
+host-test-integration:
+	@echo "Running integration tests..."
+	docker compose -f docker-compose.yml -f docker-compose-test.yml -f docker-compose-test-integration.yml run test test-integration
+	@echo "Integration tests done."
 
 host-test-system:
-	@echo "Running unit tests..."
+	@echo "Running system tests..."
 	docker compose -f docker-compose.yml -f docker-compose-test.yml -f docker-compose-test-integration.yml run test test-system
-	docker compose -f docker-compose.yml -f docker-compose-test.yml -f docker-compose-test-integration.yml stop
-	docker compose -f docker-compose.yml -f docker-compose-test.yml -f docker-compose-test-integration.yml rm -f
-	@echo "DONE"
+	@echo "System tests done."
 
-# Run in container
+
+host-tests: host-test-begin host-test-unit host-test-integration host-test-system host-test-end host-test-integration-stop 

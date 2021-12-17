@@ -59,6 +59,9 @@ jobs:
       - name: Run test end tasks
         run: make host-test-end
 
+      - name: Stop and remove all test containers system tests
+        run:  MOCK_DATASET_PATH=${PWD}/test/data/mock_services make host-test-integration-stop
+
       - name: Cheap Coverage Report
         uses: devmasx/coverage-check-action@v1.2.0
         with:

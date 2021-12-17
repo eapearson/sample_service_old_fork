@@ -381,6 +381,9 @@ def create_deploy_cfg():
     cfg[ss]["workspace-object-version-shadow-collection"] = TEST_COL_WS_OBJ_VER
     cfg[ss]["schema-collection"] = TEST_COL_SCHEMA
 
+    cfg[ss]["consistency-checker-enabled"] = False
+    cfg[ss]["consistency-checker-interval"] = 60
+
     # sample - collection = samples_sample
     # version - collection = samples_version
     # version - edge - collection = samples_ver_edge
