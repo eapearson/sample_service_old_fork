@@ -3,7 +3,7 @@ name: Run all tests manually
 on:
   workflow_dispatch:
 jobs:
-  docker_build:
+  tests:
     runs-on: ubuntu-latest
     steps:
       - name: Check out GitHub Repo
@@ -69,3 +69,8 @@ jobs:
           result_path: cov_profile.lcov
           min_coverage: 70
           token: ${{ github.token }}
+
+      - name: Send to Codecov
+        uses: codecov/codecov-action@v2
+        with: 
+          files: ./cov_profile.lcov

@@ -3,6 +3,7 @@ __pycache__
 .mypy_cache
 .pytest_cache
 __temp
+deploy.cfg
 
 # IDEs
 .idea
