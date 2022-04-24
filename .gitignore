@@ -1,10 +1,27 @@
-.DS_Store
-.idea
-test/test.cfg
-test_local
+# Development
 __pycache__
 .vscode
 deploy.cfg
+lib/SampleService/SampleServiceImpl.py.bak*
+test/test.cfg.bak
+/_temp
+.mypy_cache
+.pytest_cache
+
+# Testing
+test/test.cfg
+test_local
 .coverage
 test/test_temp/
-lib/SampleService/SampleServiceImpl.py.bak*
+test/bin/jars
+test/bin/mongo
+test/test-services.log
+htmlcov/
+cov_profile.lcov
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
